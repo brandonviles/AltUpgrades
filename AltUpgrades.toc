@@ -1,0 +1,9 @@
+## Interface: 110000
+## Title: Alt Upgrades (BoE)
+## Notes: Shows if a BoE is an upgrade for any alt
+## Author: You
+## Version: 0.2.0
+## SavedVariables: AltUpDB
+
+core.lua
+ui.lua

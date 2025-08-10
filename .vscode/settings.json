@@ -1,0 +1,46 @@
+{
+    "Lua.runtime.version": "Lua 5.1",
+    "Lua.runtime.builtin": {
+        "basic": "disable",
+        "debug": "disable",
+        "io": "disable",
+        "math": "disable",
+        "os": "disable",
+        "package": "disable",
+        "string": "disable",
+        "table": "disable",
+        "utf8": "disable"
+    },
+    "Lua.workspace.library": [
+        "~\\.vscode\\extensions\\ketho.wow-api-0.20.8\\Annotations\\Core"
+    ],
+    "Lua.type.weakUnionCheck": true,
+    "Lua.diagnostics.globals": [
+        "SlashCmdList",
+        "ItemRefTooltip",
+        "INVSLOT_HEAD",
+        "INVSLOT_NECK",
+        "INVSLOT_SHOULDER",
+        "INVSLOT_BACK",
+        "INVSLOT_CHEST",
+        "INVSLOT_WRIST",
+        "INVSLOT_HAND",
+        "INVSLOT_WAIST",
+        "INVSLOT_LEGS",
+        "INVSLOT_FEET",
+        "INVSLOT_FINGER1",
+        "INVSLOT_FINGER2",
+        "INVSLOT_TRINKET1",
+        "INVSLOT_TRINKET2",
+        "INVSLOT_MAINHAND",
+        "INVSLOT_OFFHAND",
+        "TooltipDataProcessor",
+        "ITEM_BIND_ON_EQUIP",
+        "ITEM_BIND_ON_USE",
+        "ITEM_SOULBOUND",
+        "ITEM_BIND_QUEST",
+        "NUM_BAG_SLOTS",
+        "ARMOR",
+        "MerchantFrame"
+    ]
+}
