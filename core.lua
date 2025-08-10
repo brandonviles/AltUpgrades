@@ -374,8 +374,24 @@ local function ensureOnHideReset(tt)
   tt:HookScript("OnHide", function(self) self.__altup_lastPrinted = nil end)
 end
 
+local function tooltipHasAltUp(tt)
+  if not tt or not tt.GetName then return false end
+  local name = tt:GetName()
+  if not name then return false end
+  for i = 1, tt:NumLines() do
+    local fs = _G[name.."TextLeft"..i]
+    local txt = fs and fs:GetText()
+    if txt and txt:find("Alt Upgrades:") then
+      return true
+    end
+  end
+  return false
+end
+
 local function attachTooltip(tt, link)
   if not link or not isTradableEquippable(link) then return end
+  if tooltipHasAltUp(tt) then return end  -- don't add twice in the same build
+
   local upgrades = findAltUpgrades(link)
   if #upgrades > 0 then
     tt:AddLine(" ")
@@ -400,6 +416,9 @@ local function attachTooltipAsync(tt, link)
     item:ContinueOnItemLoad(function() attachTooltip(tt, link) end)
   end
 end
+
+
+
 
 local function handleTooltip(tt, link)
   if tt == scanTip then return end -- prevent recursion
@@ -427,6 +446,7 @@ local function handleTooltip(tt, link)
   end
 end
 
+
 local function getLinkFromTooltip(tt, data)
   local _, link = tt.GetItem and tt:GetItem()
   if not link and data then
@@ -445,6 +465,65 @@ TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Hyperlink, function
     handleTooltip(tt, data.hyperlink)
   end
 end)
+
+
+-- === Compatibility hooks (keep these lean) ===
+
+-- Bag items (needed by some bag addons)
+hooksecurefunc(GameTooltip, "SetBagItem", function(tt, bag, slot)
+  local info = C_Container.GetContainerItemInfo(bag, slot)
+  local link = info and info.hyperlink
+  if link then handleTooltip(tt, link) end
+end)
+
+-- Chat popout tooltip only (avoid duplicating GameTooltip paths)
+hooksecurefunc(ItemRefTooltip, "SetHyperlink", function(tt, link)
+  if link and link:find("^item:") then handleTooltip(tt, link) end
+end)
+
+-- Equipped items (character pane)
+hooksecurefunc(GameTooltip, "SetInventoryItem", function(tt, unit, slot)
+  local link = GetInventoryItemLink(unit, slot)
+  if link then handleTooltip(tt, link) end
+end)
+
+
+-- ===== Version notice (once per version) =====
+local ADDON_NAME = ...
+local GETMETA = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
+local ADDON_VERSION = GETMETA and GETMETA(ADDON_NAME, "Version") or "dev"
+
+local function ShowWelcomeOncePerVersion()
+  AltUpDB.seenVersion = AltUpDB.seenVersion or ""
+  if AltUpDB.seenVersion ~= ADDON_VERSION then
+    print("|cff00ff00AltUpgrades|r v"..ADDON_VERSION..": thanks for trying the addon!")
+    print("|cff00ff00AltUpgrades|r is in rapid development — new features landing almost daily. 🙏 Please be patient!")
+    print("• Type |cffffff00/altupnews|r any time to see what's new or hide this message.")
+    AltUpDB.seenVersion = ADDON_VERSION
+  end
+end
+
+-- Call it on login alongside your other init
+local verFrame = CreateFrame("Frame")
+verFrame:RegisterEvent("PLAYER_LOGIN")
+verFrame:SetScript("OnEvent", ShowWelcomeOncePerVersion)
+
+-- Slash to show/hide the note on demand
+SLASH_ALTUPNEWS1 = "/altupnews"
+SlashCmdList.ALTUPNEWS = function()
+  print("|cff00ff00AltUpgrades|r v"..ADDON_VERSION.." — What's new:")
+  print("• Frequent updates incoming. If something looks off, please report on CurseForge.")
+  print("• You can toggle the minimap button with /altupmm and refresh data with /altup")
+end
+
+-- Slash to silence the intro message
+SLASH_ALTUPQUIET1 = "/altupquiet"
+SlashCmdList.ALTUPQUIET = function()
+  AltUpDB.seenVersion = GETMETA and GETMETA(ADDON_NAME, "Version") or "dev"
+  print("|cff00ff00AltUpgrades|r: intro message silenced for this version.")
+end
+
+
 
 -- =========================
 -- Events / Slash commands

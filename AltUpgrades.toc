@@ -2,8 +2,10 @@
 ## Title: Alt Upgrades (BoE)
 ## Notes: Shows if a BoE is an upgrade for any alt
 ## Author: You
-## Version: 0.2.1
+## Version: 0.3.0
 ## SavedVariables: AltUpDB
+## OptionalDeps: LibSharedMedia-3.0
+
 
 core.lua
 ui.lua

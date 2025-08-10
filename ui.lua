@@ -5,9 +5,79 @@ if not API then
 end
 
 ------------------------------------------------------------
+-- Styling: LibSharedMedia + ElvUI optional skin
+------------------------------------------------------------
+local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+
+-- sensible defaults if LSM is missing, but prefer user’s LSM selections
+local FONT_NAME = "Expressway"           -- common with ElvUI packs
+local BAR_NAME  = "ElvUI Norm"           -- statusbar texture many users have
+local BG_NAME   = "Solid"                 -- background fill
+
+local function FetchFont(size, flags)
+  local path = LSM and LSM:Fetch("font", FONT_NAME) or "Fonts\\FRIZQT__.TTF"
+  return path, size or 12, flags or "OUTLINE"
+end
+
+local function FetchBar()
+  return (LSM and LSM:Fetch("statusbar", BAR_NAME)) or "Interface\\Buttons\\WHITE8x8"
+end
+
+local function FetchBG()
+  return (LSM and LSM:Fetch("background", BG_NAME)) or "Interface\\Buttons\\WHITE8x8"
+end
+
+-- Try to borrow ElvUI’s skin method if present
+-- Robust ElvUI detection (works with/without C_AddOns)
+local function IsLoaded(addon)
+  if C_AddOns and C_AddOns.IsAddOnLoaded then
+    return C_AddOns.IsAddOnLoaded(addon)
+  elseif IsAddOnLoaded then
+    return IsAddOnLoaded(addon)
+  else
+    return false
+  end
+end
+
+local E, L, V, P, G
+local S -- ElvUI Skins module
+
+if IsLoaded("ElvUI") and ElvUI then
+  E, L, V, P, G = unpack(ElvUI)
+  if E and E.GetModule then
+    S = E:GetModule("Skins")
+  end
+end
+
+
+-- Apply a consistent look. If ElvUI is present, let it handle borders/colors.
+local function SkinFrame(frame)
+  frame:SetBackdrop(nil) -- let ElvUI or our code set it cleanly
+
+  if S and S.HandleFrame then
+    -- ElvUI will set its own template/backdrop/colors
+    S:HandleFrame(frame, true) -- 'true' = default template
+  else
+    -- Fallback Blizzard-style with SharedMedia textures
+    frame:SetBackdrop({
+      bgFile   = FetchBG(),
+      edgeFile = "Interface\\Buttons\\WHITE8x8",
+      tile = true, tileSize = 16, edgeSize = 1,
+      insets = { left = 1, right = 1, top = 1, bottom = 1 }
+    })
+    frame:SetBackdropColor(0, 0, 0, 0.85)
+    frame:SetBackdropBorderColor(0, 0, 0, 1)
+  end
+end
+
+
+------------------------------------------------------------
 -- Basic frame
 ------------------------------------------------------------
 local UI = CreateFrame("Frame", "AltUpgradesUI", UIParent, "BackdropTemplate")
+SkinFrame(UI)  -- make the main window pretty
+
+
 UI:SetSize(480, 360)
 UI:SetPoint("CENTER")
 UI:SetMovable(true)
@@ -17,19 +87,21 @@ UI:SetScript("OnDragStart", UI.StartMoving)
 UI:SetScript("OnDragStop", UI.StopMovingOrSizing)
 UI:Hide()
 
--- Backdrop / style (simple)
-UI:SetBackdrop({
-  bgFile = "Interface/Tooltips/UI-Tooltip-Background",
-  edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
-  tile = true, tileSize = 16, edgeSize = 16,
-  insets = { left = 4, right = 4, top = 4, bottom = 4 }
-})
-UI:SetBackdropColor(0, 0, 0, 0.85)
+
 
 -- Title
 local Title = UI:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
 Title:SetPoint("TOPLEFT", 12, -10)
 Title:SetText("Alt Upgrades in Bags")
+
+-- Titles / labels
+local titleFont, titleSize, titleFlags = FetchFont(14, "OUTLINE")
+Title:SetFont(titleFont, titleSize, titleFlags)
+
+-- Subtle status/banner line under the title
+local Beta = UI:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+Beta:SetPoint("TOPLEFT", Title, "BOTTOMLEFT", 0, -2)
+Beta:SetText("|cffffd100Beta:|r rapid updates, expect frequent changes")
 
 -- Close button
 local Close = CreateFrame("Button", nil, UI, "UIPanelCloseButton")
@@ -38,24 +110,35 @@ Close:SetPoint("TOPRIGHT", 0, 0)
 -- Refresh button
 local RefreshBtn = CreateFrame("Button", nil, UI, "UIPanelButtonTemplate")
 RefreshBtn:SetSize(80, 22)
-RefreshBtn:SetPoint("TOPRIGHT", Close, "BOTTOMRIGHT", -6, -6)
+RefreshBtn:SetPoint("TOPRIGHT", Close, "BOTTOMRIGHT", 0, -2)
 RefreshBtn:SetText("Refresh")
 
 -- Status line
 local Status = UI:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-Status:SetPoint("TOPLEFT", Title, "BOTTOMLEFT", 0, -6)
+Status:SetPoint("TOPLEFT", Beta, "BOTTOMLEFT", 0, -6)
 Status:SetText("Scanning...")
+
+if Status then
+  local f, s, fl = FetchFont(12, "")
+  Status:SetFont(f, s, fl)
+end
 
 ------------------------------------------------------------
 -- Scroll list
 ------------------------------------------------------------
 local Scroll = CreateFrame("ScrollFrame", "AltUpgradesUIScroll", UI, "UIPanelScrollFrameTemplate")
-Scroll:SetPoint("TOPLEFT", 12, -50)
+Scroll:SetPoint("TOPLEFT", 20, -50)
 Scroll:SetPoint("BOTTOMRIGHT", -28, 12)
 
 local Content = CreateFrame("Frame", nil, Scroll)
 Content:SetSize(1,1)  -- width will expand with lines
 Scroll:SetScrollChild(Content)
+
+-- Row background texture via SharedMedia (nice subtle striping)
+local function StyleRowBG(tex, isAlt)
+  tex:SetTexture(FetchBar())
+  tex:SetVertexColor(1, 1, 1, isAlt and 0.08 or 0.12)
+end
 
 -- Row factory
 local ROW_HEIGHT = 22
@@ -67,7 +150,7 @@ local function CreateRow(parent, index)
 
   row.bg = row:CreateTexture(nil, "BACKGROUND")
   row.bg:SetAllPoints()
-  row.bg:SetColorTexture(1,1,1, index % 2 == 0 and 0.04 or 0.08)
+  StyleRowBG(row.bg, index % 2 == 0)
 
   row.left = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   row.left:SetPoint("LEFT", 6, 0)
@@ -76,6 +159,10 @@ local function CreateRow(parent, index)
   row.right = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   row.right:SetPoint("RIGHT", -6, 0)
   row.right:SetJustifyH("RIGHT")
+
+  local rowFont, rowSize, rowFlags = FetchFont(12, "")
+row.left:SetFont(rowFont, rowSize, rowFlags)
+row.right:SetFont(rowFont, rowSize, rowFlags)
 
   -- Tooltip on hover to show full alt list
   row:SetScript("OnEnter", function(self)
