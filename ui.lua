@@ -127,7 +127,7 @@ end
 -- Scroll list
 ------------------------------------------------------------
 local Scroll = CreateFrame("ScrollFrame", "AltUpgradesUIScroll", UI, "UIPanelScrollFrameTemplate")
-Scroll:SetPoint("TOPLEFT", 20, -50)
+Scroll:SetPoint("TOPLEFT", 12, -50)
 Scroll:SetPoint("BOTTOMRIGHT", -28, 12)
 
 local Content = CreateFrame("Frame", nil, Scroll)
@@ -317,6 +317,43 @@ local function RefreshList()
   end)
 end
 
+local function RefreshMine()
+  Status:SetText("Scanning account-wide upgrades for you...")
+  C_Timer.After(0, function()
+    local data = {}
+    local vault = API.findVaultUpgradesForMe()
+    for _, v in ipairs(vault) do
+      local name = C_Item.GetItemInfo(v.link) or "Unknown"
+      data[#data+1] = {
+        name = name,
+        link = v.link,
+        ilvl = v.ilvl,
+        upgrades = { { key = "|cffaaaaaaOwner:|r "..v.owner, delta = v.delta } }, -- reuse field
+        owner = v.owner,
+        delta = v.delta,
+      }
+    end
+    -- show owner + delta on the right
+    EnsureRows(#data)
+    for i, row in ipairs(rows) do
+      local item = data[i]
+      if item then
+        row:Show()
+        row.data = item
+        row.left:SetText(("%s |cffaaaaaa(ilvl %d)|r"):format(item.name or "Unknown", item.ilvl or 0))
+        row.right:SetText(("%s  |cff00ff00+%d|rilvl"):format(item.owner or "?", item.delta or 0))
+      else
+        row:Hide()
+        row.data = nil
+      end
+    end
+    Content:SetHeight(#data * ROW_HEIGHT)
+    Status:SetText(("%d upgrade%s found for you across all alts"):format(#data, #data==1 and "" or "s"))
+  end)
+end
+AltUpgradesUI.RefreshMine = RefreshMine
+
+
 -- make the real refresh available to other callers (minimap toggle, slash, etc.)
 AltUpgradesUI.RefreshList = RefreshList
 
@@ -329,6 +366,13 @@ SLASH_ALTUPUI1 = "/altupui"
 SlashCmdList.ALTUPUI = function()
   if UI:IsShown() then UI:Hide() else RefreshList(); UI:Show() end
 end
+
+SLASH_ALTUPFORME1 = "/altupforme"
+SlashCmdList.ALTUPFORME = function()
+  if not AltUpgradesUI:IsShown() then AltUpgradesUI:Show() end
+  if AltUpgradesUI.RefreshMine then AltUpgradesUI.RefreshMine() end
+end
+
 
 ------------------------------------------------------------
 -- Auto-refresh on bag changes / login

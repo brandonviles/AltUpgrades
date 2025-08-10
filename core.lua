@@ -8,7 +8,12 @@
 --  • Expose minimal API for UI (AltUp_API)
 ----------------------------------------
 local ADDON = ...
-AltUpDB = AltUpDB or { chars = {}, minimap = AltUpDB and AltUpDB.minimap or { angle = 45, hide = false } }
+AltUpDB = AltUpDB or {}
+AltUpDB.chars   = AltUpDB.chars   or {}
+AltUpDB.items   = AltUpDB.items   or {}   -- vault
+AltUpDB.minimap = AltUpDB.minimap or { angle = 45, hide = false }
+
+
 
 -- =========================
 -- Debug (toggle via /altupdebug, optional SHIFT gating)
@@ -96,6 +101,7 @@ local function ItemLevelFromEquipSlot(slot)
   return 0
 end
 
+
 -- Snapshot equipped gear for this character (class/level/spec + slot ilvls)
 local function scanEquipped()
   local key = getPlayerKey()
@@ -148,6 +154,69 @@ local function isTradableEquippable(link)
   local tradable = (bindType == 2) or (bindType == 3)
   dprint("isTradableEquippable:", "equipLoc=", tostring(equipLoc), "bindType=", tostring(bindType), tradable and "OK" or "NO")
   return equippable and tradable and (equipLoc and equipLoc ~= "")
+end
+
+-- Scan bags for tradable items and save to DB
+local function scanBagsToDB()
+  AltUpDB.items = AltUpDB.items or {}
+  local key = getPlayerKey()
+  local out = {}
+
+  -- bag indices: 0..NUM_BAG_SLOTS (backpack + normal bags)
+  -- plus Retail's Reagent Bag (index 5)
+  local REAGENT = (Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag) or 5
+
+  for bag = 0, NUM_BAG_SLOTS do
+    local slots = C_Container.GetContainerNumSlots(bag)
+    for slot = 1, slots do
+      local info = C_Container.GetContainerItemInfo(bag, slot)
+      local link = info and info.hyperlink
+      if link and not info.isBound then
+        -- quick equippable gate (nil means uncached; treat as equipped if equipLoc present)
+        local _, _, _, equipLoc = C_Item.GetItemInfoInstant(link)
+        local equippable = C_Item.IsEquippableItem(link)
+        if equippable == nil then equippable = (equipLoc and equipLoc ~= "") end
+        if equippable and equipLoc and equipLoc ~= "" then
+          -- reuse your robust tradable check (BoE/BoU vs Soulbound)
+          if isTradableEquippable(link) then
+            out[#out+1] = {
+              link  = link,
+              ilvl  = ItemLevelFromLink(link),
+              count = info.stackCount or 1,
+              bound = false,
+              bag   = bag,
+              slot  = slot,
+              ts    = time(),
+            }
+          end
+        end
+      end
+    end
+  end
+
+  -- Reagent bag
+  do
+    local bag = REAGENT
+    local slots = C_Container.GetContainerNumSlots(bag) or 0
+    for slot = 1, slots do
+      local info = C_Container.GetContainerItemInfo(bag, slot)
+      local link = info and info.hyperlink
+      if link and not info.isBound then
+        local _, _, _, equipLoc = C_Item.GetItemInfoInstant(link)
+        local equippable = C_Item.IsEquippableItem(link)
+        if equippable == nil then equippable = (equipLoc and equipLoc ~= "") end
+        if equippable and equipLoc and equipLoc ~= "" and isTradableEquippable(link) then
+          out[#out+1] = {
+            link = link, ilvl = ItemLevelFromLink(link),
+            count = info.stackCount or 1, bound = false, bag = bag, slot = slot, ts = time(),
+          }
+        end
+      end
+    end
+  end
+
+  AltUpDB.items[key] = out
+  dprint("Bag vault saved for", key, "#items=", #out)
 end
 
 -- Map equipLoc → candidate slot(s) (multi-slot rings/trinkets)
@@ -365,6 +434,48 @@ local function findAltUpgrades(link)
   return upgrades
 end
 
+local function findVaultUpgradesForMe()
+  local meKey = getPlayerKey()
+  local me = AltUpDB.chars[meKey]
+  if not me or not me.class then
+    -- first login moment: ensure we have my snapshot
+    scanEquipped()
+    me = AltUpDB.chars[meKey]
+  end
+
+  local out = {}
+  for ownerKey, items in pairs(AltUpDB.items or {}) do
+    for _, it in ipairs(items) do
+      local link = it.link
+      -- use your existing gates, but target is "me"
+      local _, _, _, equipLoc = C_Item.GetItemInfoInstant(link)
+      local slots = equipLoc and equipLocToSlots and equipLocToSlots(equipLoc)
+      if slots and canAltUse(link, me) then
+        local have = worstAltIlvlForSlots(me, slots)
+        local delta = math.floor((it.ilvl or 0) - (have or 0))
+        if delta > (MIN_UPGRADE_DELTA or 0) then
+          out[#out+1] = {
+            link   = link,
+            ilvl   = it.ilvl or 0,
+            owner  = ownerKey,
+            delta  = delta,
+            count  = it.count or 1,
+            ts     = it.ts,
+          }
+        end
+      end
+    end
+  end
+
+  table.sort(out, function(a,b)
+    if a.delta ~= b.delta then return a.delta > b.delta end
+    if a.ilvl ~= b.ilvl then return a.ilvl > b.ilvl end
+    return (a.owner or "") < (b.owner or "")
+  end)
+  return out
+end
+
+
 -- =========================
 -- Tooltip hookup (modern)
 -- =========================
@@ -532,6 +643,8 @@ end
 local function scanEquippedSafe()
   C_Timer.After(0.5, scanEquipped)
   C_Timer.After(2.0, scanEquipped)
+  C_Timer.After(0.6, scanBagsToDB)
+  C_Timer.After(2.1, scanBagsToDB)
 end
 
 local ev = CreateFrame("Frame")
@@ -540,6 +653,7 @@ ev:RegisterEvent("PLAYER_ENTERING_WORLD")
 ev:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 ev:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 ev:RegisterEvent("PLAYER_LEVEL_UP")
+ev:RegisterEvent("BAG_UPDATE_DELAYED")
 ev:SetScript("OnEvent", function(_, event)
   if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
     scanEquippedSafe()
@@ -547,7 +661,11 @@ ev:SetScript("OnEvent", function(_, event)
     -- debounce quick bursts
     if ev.__pending then return end
     ev.__pending = true
-    C_Timer.After(0.25, function() ev.__pending = false; scanEquipped() end)
+    C_Timer.After(0.25, function()
+      ev.__pending = false
+      scanEquipped()
+      scanBagsToDB()
+    end)
   end
 end)
 
@@ -556,6 +674,14 @@ SLASH_ALTUP1 = "/altup"
 SlashCmdList.ALTUP = function()
   scanEquipped()
   print("|cff00ff00AltUpgrades:|r snapshot refreshed for", getPlayerKey())
+end
+
+SLASH_ALTUPBAGS1 = "/altupbags"
+SlashCmdList.ALTUPBAGS = function()
+  scanBagsToDB()
+  local me = getPlayerKey()
+  local n = (AltUpDB.items[me] and #AltUpDB.items[me]) or 0
+  print("|cff00ff00AltUpgrades:|r vault now tracks", n, "tradable items for", me)
 end
 
 -- /altupdebug (or /altupdebug shift)
@@ -573,7 +699,11 @@ end
 -- /altupreset → reset DB (keep minimap defaults)
 SLASH_ALTUPRESET1 = "/altupreset"
 SlashCmdList.ALTUPRESET = function()
-  AltUpDB = { chars = {}, minimap = { angle = 45, hide = false } }
+  AltUpDB = {
+    chars   = {},
+    items   = {},                      -- << include vault
+    minimap = { angle = 45, hide = false },
+  }
   print("|cff00ff00AltUpgrades:|r DB reset. Re-run /altup on each alt.")
 end
 
@@ -588,7 +718,10 @@ end)
 -- Export minimal API for UI.lua
 -- =========================
 _G.AltUp_API = {
-  findAltUpgrades       = findAltUpgrades,      -- function(link) -> { {key, delta}, ... }
-  isTradableEquippable  = isTradableEquippable, -- function(link) -> boolean
-  itemLevelFromLink     = ItemLevelFromLink,    -- function(link) -> number
+  findAltUpgrades        = findAltUpgrades,      -- function(link) -> { {key, delta}, ... }
+  isTradableEquippable   = isTradableEquippable, -- function(link) -> boolean
+  itemLevelFromLink      = ItemLevelFromLink,    -- function(link) -> number
+  findVaultUpgradesForMe = findVaultUpgradesForMe,
+  scanBagsToDB           = scanBagsToDB,
+
 }
