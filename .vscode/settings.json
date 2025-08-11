@@ -41,6 +41,11 @@
         "ITEM_BIND_QUEST",
         "NUM_BAG_SLOTS",
         "ARMOR",
-        "MerchantFrame"
+        "MerchantFrame",
+        "PanelTemplates_TabResize",
+        "PanelTemplates_SetNumTabs",
+        "PanelTemplates_SetTab",
+        "PanelTemplates_DeselectTab",
+        "PanelTemplates_SelectTab"
     ]
 }

@@ -10,8 +10,9 @@
 local ADDON = ...
 AltUpDB = AltUpDB or {}
 AltUpDB.chars   = AltUpDB.chars   or {}
-AltUpDB.items   = AltUpDB.items   or {}   -- vault
+AltUpDB.items   = AltUpDB.items   or {}
 AltUpDB.minimap = AltUpDB.minimap or { angle = 45, hide = false }
+AltUpDB.uiState = AltUpDB.uiState or { mode = "BAGS" }
 
 
 

@@ -1,4 +1,23 @@
-AltUpgrades – v0.2.0
+## v0.4.0
+- Please EXPECT BUGS! I am listening to the community! Hope to Keep Up
+- New: Blizzard-style tabs to switch views:
+  - Upgrades for Me
+  - Upgrades for Alts
+- Work in Progress: Minimap button now sits on the minimap edge and is draggable; position is saved. Works fine with/without collectors.
+- New: Account “item vault” saves tradable items by character; the Upgrade for Me tab shows owner + ilvl gain.
+- Fix: Tooltip hooks stabilized; chat and bag paths deduped to avoid duplicates/flicker.
+- Fix: Safer DB initialization and bag scanning (includes reagent bag); no more nil errors on fresh installs.
+- UI: Cleaned list layout per tab, clearer status texts, and small styling tweaks.
+
+
+
+##  v0.2.1
+Changelog:
+
+Fixed: Updated interface version to correct version
+
+
+## v0.2.0
 Changelog:
 
 New: Added full weapon proficiency checks per class so you’ll never see upgrades for weapons your alts can’t equip.
@@ -14,7 +33,3 @@ If you see something show as an upgrade that shouldn’t be, please note the ite
 
 ---------------------------------------------------------------------------------------------------------------------
 
-AltUpgrades – v0.2.1
-Changelog:
-
-Fixed: Updated interface version to correct version
