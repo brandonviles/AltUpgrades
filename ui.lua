@@ -1,8 +1,15 @@
 local API = _G.AltUp_API
+
 if not API then
   -- Safety: if core didn't load, bail
   return
 end
+
+local FN = _G.AltUp_Fn
+if not FN then
+  print("|cffff0000AltUpgrades:|r functions.lua not loaded (check TOC order/filename).")
+end
+
 
 -- Persisted UI state (which tab was last used)
 AltUpDB = AltUpDB or {}
@@ -89,7 +96,7 @@ UI:Hide()
 -- Title
 local Title = UI:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
 Title:SetPoint("TOPLEFT", 12, -10)
-Title:SetText("AltUpgrades - *Must load addon on each alt to populate data!*")
+Title:SetText("AltUpgrades")
 
 -- Titles / labels
 do
@@ -101,6 +108,16 @@ end
 local Beta = UI:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 Beta:SetPoint("TOPLEFT", Title, "BOTTOMLEFT", 0, -2)
 Beta:SetText("|cffffd100Beta:|r rapid updates — expect frequent changes")
+
+do
+  local ADDON = ...
+  local GETMETA = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
+  local VER = GETMETA and GETMETA(ADDON, "Version") or "dev"
+  if tostring(VER):lower():find("alpha") then
+    Beta:SetText("|cffff0000ALPHA:|r experimental build — expect frequent changes")
+  end
+end
+
 
 -- Close button
 local Close = CreateFrame("Button", nil, UI, "UIPanelCloseButton")
@@ -179,9 +196,14 @@ local function CreateRow(parent, index)
       GameTooltip:AddLine("Upgrades for:", 0.8, 1, 0.8)
       local ups = self.data.upgrades or {}
       for i = 1, math.min(#ups, 12) do
-        local u = ups[i]
-        GameTooltip:AddLine(("• %s: +%d ilvl"):format(u.key, u.delta), 0.9, 0.9, 0.9)
-      end
+  local u = ups[i]
+  if u.note then
+    GameTooltip:AddLine(("• %s: +%d ilvl  |cffffff00(⚠ %s)|r"):format(u.key, u.delta, u.note), 0.9, 0.9, 0.9)
+  else
+    GameTooltip:AddLine(("• %s: +%d ilvl"):format(u.key, u.delta), 0.9, 0.9, 0.9)
+  end
+end
+
       if #ups > 12 then
         GameTooltip:AddLine(("…and %d more"):format(#ups - 12), 0.7, 0.7, 0.7)
       end
@@ -237,7 +259,13 @@ local function LayoutBags(data)
       row.data = item
       row.left:SetText(("%s |cffaaaaaa(ilvl %d)|r"):format(item.name or "Unknown", item.ilvl or 0))
       local top = item.upgrades and item.upgrades[1]
-      row.right:SetText(top and (top.key .. "  |cff00ff00+" .. top.delta .. "|rilvl") or "")
+if top then
+  local note = top.note and (" |cffffff00(⚠ "..top.note..")|r") or ""
+  row.right:SetText(("%s  |cff00ff00+%d|rilvl%s"):format(top.key, top.delta, note))
+else
+  row.right:SetText("")
+end
+
     else
       row:Hide(); row.data = nil
     end
@@ -462,66 +490,57 @@ end)
 ------------------------------------------------------------
 -- Tabs (Blizzard PanelTabButtonTemplate)
 ------------------------------------------------------------
--- We keep SetMode from earlier in the file. If you removed it, re-add it above this block.
--- SetMode(mode) must call RefreshList/RefreshMine and update AltUpDB.uiState.mode.
+-- SetMode(mode) is defined below in this block.
 
--- 1) Create two real tabs
+-- 1) Create two real tabs (with IDs!)
 local Tab1 = CreateFrame("Button", "AltUpgradesTab1", UI, "PanelTabButtonTemplate")
-Tab1:SetPoint("TOPLEFT", UI, "TOPLEFT", 12, -70)  -- position under title
+Tab1:SetPoint("TOPLEFT", UI, "TOPLEFT", 12, -70)  -- under title+beta
 Tab1:SetText("Upgrades for Others")
+Tab1:SetID(1)
 PanelTemplates_TabResize(Tab1, 0)
 
 local Tab2 = CreateFrame("Button", "AltUpgradesTab2", UI, "PanelTabButtonTemplate")
-Tab2:SetPoint("LEFT", Tab1, "RIGHT", -14, 0)  -- negative spacing equals joined tab look
+Tab2:SetPoint("LEFT", Tab1, "RIGHT", -14, 0)
 Tab2:SetText("Upgrades for Me")
+Tab2:SetID(2)
 PanelTemplates_TabResize(Tab2, 0)
 
--- 2) Register tabs with the panel template helpers
+-- 2) Register with panel helpers
 PanelTemplates_SetNumTabs(UI, 2)
-UI.tabs = { Tab1, Tab2 }  -- so PanelTemplates_* can find them
+UI.tabs = { Tab1, Tab2 }
 
--- 3) Update tab highlight
-local function UpdateTabs()
-  local mode = (AltUpDB.uiState and AltUpDB.uiState.mode) or "BAGS"
-  local activeIndex = (mode == "VAULT") and 2 or 1
-  PanelTemplates_SetTab(UI, activeIndex)
-end
-
+-- 3) Mode switch + render
 local function SetMode(mode)
   AltUpDB.uiState = AltUpDB.uiState or { mode = "BAGS" }
   AltUpDB.uiState.mode = mode or AltUpDB.uiState.mode or "BAGS"
   HideAllRows()
   if AltUpDB.uiState.mode == "BAGS" then
     RefreshList()
+    PanelTemplates_SetTab(UI, 1)
+    PanelTemplates_SelectTab(Tab1); PanelTemplates_DeselectTab(Tab2)
+    Tab1:Disable(); Tab2:Enable()
   else
     RefreshMine()
+    PanelTemplates_SetTab(UI, 2)
+    PanelTemplates_SelectTab(Tab2); PanelTemplates_DeselectTab(Tab1)
+    Tab2:Disable(); Tab1:Enable()
   end
-  UpdateTabs()
 end
 
--- 4) Wire clicks to SetMode + tab highlight
-Tab1:SetScript("OnClick", function()
-  SetMode("BAGS")
-  UpdateTabs()
-end)
+-- 4) Click handlers
+Tab1:SetScript("OnClick", function() SetMode("BAGS") end)
+Tab2:SetScript("OnClick", function() SetMode("VAULT") end)
 
-Tab2:SetScript("OnClick", function()
-  SetMode("VAULT")
-  UpdateTabs()
-end)
-
--- 5) When the window opens, select previously used tab and refresh it
+-- 5) Init to last-used tab when opened
 AltUpgradesUI:HookScript("OnShow", function()
-  UpdateTabs()
-  SetMode((AltUpDB.uiState and AltUpDB.uiState.mode) or "BAGS")
+  local m = (AltUpDB.uiState and AltUpDB.uiState.mode) or "BAGS"
+  SetMode(m)
 end)
 
--- 6) Push the list down a bit to make room for tabs
+-- 6) Push list down under tabs
 Scroll:ClearAllPoints()
-Scroll:SetPoint("TOPLEFT", 12, -50 - 60)   -- extra space under tabs
+Scroll:SetPoint("TOPLEFT", 12, -50 - 60)
 Scroll:SetPoint("BOTTOMRIGHT", -28, 12)
-
-
 
 ------------------------------------------------------------
 -- Slash commands

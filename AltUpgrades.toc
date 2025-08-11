@@ -1,11 +1,11 @@
 ## Interface: 110200
-## Title: Alt Upgrades (BoE)
-## Notes: Shows if a BoE is an upgrade for any alt
-## Author: You
-## Version: 0.3.0
+## Title: AltUpgrades
+## Notes: BoE upgrade finder for your alts
+## Author: Xalphay
+## Version: v0.4.0-alpha
 ## SavedVariables: AltUpDB
 ## OptionalDeps: LibSharedMedia-3.0
 
-
+functions.lua
 core.lua
 ui.lua

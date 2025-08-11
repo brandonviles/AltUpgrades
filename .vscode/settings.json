@@ -46,6 +46,7 @@
         "PanelTemplates_SetNumTabs",
         "PanelTemplates_SetTab",
         "PanelTemplates_DeselectTab",
-        "PanelTemplates_SelectTab"
+        "PanelTemplates_SelectTab",
+        "RAID_CLASS_COLORS"
     ]
 }
